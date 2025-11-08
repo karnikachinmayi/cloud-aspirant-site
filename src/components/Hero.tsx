@@ -21,7 +21,7 @@ export const Hero = () => {
           <div className="space-y-4">
             <h1 className="text-5xl md:text-7xl font-bold tracking-tight">
               Hi, I'm{" "}
-              <span className="gradient-hero bg-clip-text text-transparent">
+              <span className="text-white font-bold">
                 karnika chinmayi M R
               </span>
             </h1>
