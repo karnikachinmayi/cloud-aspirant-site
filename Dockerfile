@@ -1,27 +1,29 @@
 # Build stage
-FROM oven/bun:1 as builder
+FROM node:20-alpine as build
 
+# Set working directory
 WORKDIR /app
 
 # Copy package files
-COPY package.json bun.lockb ./
+COPY package.json ./
+COPY bun.lockb ./
 
 # Install dependencies
-RUN bun install
+RUN npm install
 
 # Copy the rest of the application
 COPY . .
 
 # Build the application
-RUN bun run build
+RUN npm run build
 
 # Production stage
 FROM nginx:alpine
 
-# Copy the built assets from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Copy built assets from build stage
+COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copy nginx configuration if needed
+# Copy nginx configuration if you have any custom config
 # COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Expose port 80
