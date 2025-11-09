@@ -3,7 +3,7 @@ name: Deploy React App to Azure VM
 on:
   push:
     branches:
-      - main  # deploy on push to main branch
+      - main
 
 jobs:
   deploy:
@@ -22,11 +22,29 @@ jobs:
           username: ${{ secrets.AZURE_USER }}
           key: ${{ secrets.AZURE_SSH_KEY }}
           script: |
-            set -e
+            set -e  # stop on first error
             cd /home/${{ secrets.AZURE_USER }}
 
-            echo "🧹 Cleaning old repo..."
-            sudo rm -rf cloud-aspirant-site
+            echo "🧹 Cleaning old deployment..."
+
+            # Stop & remove old container
+            if sudo docker ps -a --format '{{.Names}}' | grep -q '^cloud-aspirant-site$'; then
+              echo "Stopping old container..."
+              sudo docker stop cloud-aspirant-site || true
+              sudo docker rm cloud-aspirant-site || true
+            fi
+
+            # Remove old image
+            if sudo docker images -q cloud-aspirant-site; then
+              echo "Removing old Docker image..."
+              sudo docker rmi cloud-aspirant-site:latest || true
+            fi
+
+            # Remove old repo folder
+            if [ -d "cloud-aspirant-site" ]; then
+              echo "Removing old repo folder..."
+              rm -rf cloud-aspirant-site
+            fi
 
             echo "📦 Cloning latest code..."
             git clone https://github.com/karnikachinmayi/cloud-aspirant-site.git
@@ -34,18 +52,14 @@ jobs:
 
             echo "🔍 Checking Dockerfile..."
             if [ ! -f Dockerfile ]; then
-              echo "❌ No Dockerfile found!"
+              echo "❌ No Dockerfile found! Deployment aborted."
               exit 1
             fi
 
-            echo "🛑 Removing old container (if any)..."
-            sudo docker stop cloud-aspirant-site || true
-            sudo docker rm cloud-aspirant-site || true
+            echo "🚧 Building Docker image..."
+            DOCKER_BUILDKIT=1 sudo docker build -t cloud-aspirant-site .
 
-            echo "🚧 Building new Docker image..."
-            sudo docker build -t cloud-aspirant-site .
-
-            echo "🚀 Starting container..."
+            echo "🚀 Running container..."
             sudo docker run -d -p 80:80 --restart unless-stopped --name cloud-aspirant-site cloud-aspirant-site
 
-            echo "✅ Deployment successful!"
+            echo "✅ Deployment complete!"
