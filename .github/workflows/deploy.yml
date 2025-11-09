@@ -10,15 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout the repo
+      # 1️⃣ Checkout repo (for any use if needed)
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2️⃣ Setup Docker Buildx (optional for BuildKit)
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # 3️⃣ SSH to Azure VM and deploy
+      # 2️⃣ SSH and deploy
       - name: Deploy to Azure VM
         uses: appleboy/ssh-action@v1.1.0
         with:
@@ -26,38 +22,47 @@ jobs:
           username: ${{ secrets.AZURE_USER }}
           key: ${{ secrets.AZURE_SSH_KEY }}
           script: |
+            set -e  # stop on first error
             cd /home/${{ secrets.AZURE_USER }}
 
-            # Remove old partially created container if exists
+            # Ensure Docker is accessible
+            if ! sudo docker ps > /dev/null 2>&1; then
+              echo "⚙️  Docker not accessible, adding user to docker group..."
+              sudo usermod -aG docker $USER || true
+            fi
+
+            # Clone or pull repo
+            if [ -d "cloud-aspirant-site/.git" ]; then
+              echo "📦 Updating existing repo..."
+              cd cloud-aspirant-site
+              git pull origin main
+            else
+              echo "📦 Cloning fresh repo..."
+              rm -rf cloud-aspirant-site
+              git clone https://github.com/karnikachinmayi/cloud-aspirant-site.git
+              cd cloud-aspirant-site
+            fi
+
+            # Confirm Dockerfile exists
+            if [ ! -f Dockerfile ]; then
+              echo " No Dockerfile found! Check Dockerfile path or name."
+              exit 1
+            fi
+
+            # Stop old container if running
             if sudo docker ps -a --format '{{.Names}}' | grep -q '^cloud-aspirant-site$'; then
-              echo "Removing old container..."
+              echo "🛑 Stopping old container..."
               sudo docker stop cloud-aspirant-site || true
               sudo docker rm cloud-aspirant-site || true
             fi
 
-            # Remove other container using port 80 (optional safety)
-            EXISTING_PORT_CONTAINER=$(sudo lsof -t -i:80)
-            if [ ! -z "$EXISTING_PORT_CONTAINER" ]; then
-              echo "Stopping container using port 80..."
-              sudo docker stop $(sudo docker ps -q --filter "publish=80") || true
-            fi
+            # Optional: clean old image
+            sudo docker image rm cloud-aspirant-site:latest || true
 
-            # Remove old repo folder
-            if [ -d "cloud-aspirant-site" ]; then
-              echo "Cleaning old repo directory..."
-              rm -rf cloud-aspirant-site
-            fi
+            echo "🚧 Building new Docker image..."
+            sudo docker build -t cloud-aspirant-site .
 
-            # Clone latest code
-            git clone https://github.com/karnikachinmayi/cloud-aspirant-site.git
-            cd cloud-aspirant-site
-
-            # Build Docker image with BuildKit
-            echo "Building Docker image..."
-            DOCKER_BUILDKIT=1 sudo docker build -t cloud-aspirant-site .
-
-            # Run container
-            echo "Starting container..."
+            echo "🚀 Starting container..."
             sudo docker run -d -p 80:80 --restart unless-stopped --name cloud-aspirant-site cloud-aspirant-site
 
-            echo "Deployment complete!"
+            echo "✅ Deployment complete!"
