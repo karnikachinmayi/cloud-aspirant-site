@@ -10,11 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repo (for any use if needed)
+      # 1️⃣ Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2️⃣ SSH and deploy
+      # 2️⃣ SSH into Azure VM and deploy
       - name: Deploy to Azure VM
         uses: appleboy/ssh-action@v1.1.0
         with:
@@ -22,42 +22,22 @@ jobs:
           username: ${{ secrets.AZURE_USER }}
           key: ${{ secrets.AZURE_SSH_KEY }}
           script: |
-            set -e  # stop on first error
+            set -e
             cd /home/${{ secrets.AZURE_USER }}
 
-            # Ensure Docker is accessible
-            if ! sudo docker ps > /dev/null 2>&1; then
-              echo "⚙️  Docker not accessible, adding user to docker group..."
-              sudo usermod -aG docker $USER || true
-            fi
+            echo "📦 Preparing repository..."
+            rm -rf cloud-aspirant-site
+            git clone https://github.com/karnikachinmayi/cloud-aspirant-site.git
+            cd cloud-aspirant-site
 
-            # Clone or pull repo
-            if [ -d "cloud-aspirant-site/.git" ]; then
-              echo "📦 Updating existing repo..."
-              cd cloud-aspirant-site
-              git pull origin main
-            else
-              echo "📦 Cloning fresh repo..."
-              rm -rf cloud-aspirant-site
-              git clone https://github.com/karnikachinmayi/cloud-aspirant-site.git
-              cd cloud-aspirant-site
-            fi
-
-            # Confirm Dockerfile exists
             if [ ! -f Dockerfile ]; then
-              echo " No Dockerfile found! Check Dockerfile path or name."
+              echo "❌ No Dockerfile found!"
               exit 1
             fi
 
-            # Stop old container if running
-            if sudo docker ps -a --format '{{.Names}}' | grep -q '^cloud-aspirant-site$'; then
-              echo "🛑 Stopping old container..."
-              sudo docker stop cloud-aspirant-site || true
-              sudo docker rm cloud-aspirant-site || true
-            fi
-
-            # Optional: clean old image
-            sudo docker image rm cloud-aspirant-site:latest || true
+            echo "🛑 Stopping old container..."
+            sudo docker stop cloud-aspirant-site || true
+            sudo docker rm cloud-aspirant-site || true
 
             echo "🚧 Building new Docker image..."
             sudo docker build -t cloud-aspirant-site .
