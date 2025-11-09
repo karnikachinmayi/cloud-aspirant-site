@@ -1,23 +1,25 @@
-
 name: Deploy React App to Azure VM
 
 on:
   push:
     branches:
-      - main  # change if your branch name is different
+      - main  # deploy on push to main branch
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout the repo
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # 2️⃣ Setup Docker Buildx (optional for BuildKit)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to Azure VM via SSH and deploy
+      # 3️⃣ SSH to Azure VM and deploy
+      - name: Deploy to Azure VM
         uses: appleboy/ssh-action@v1.1.0
         with:
           host: ${{ secrets.AZURE_HOST }}
@@ -25,10 +27,37 @@ jobs:
           key: ${{ secrets.AZURE_SSH_KEY }}
           script: |
             cd /home/${{ secrets.AZURE_USER }}
-            rm -rf linux-react-dream
+
+            # Remove old partially created container if exists
+            if sudo docker ps -a --format '{{.Names}}' | grep -q '^cloud-aspirant-site$'; then
+              echo "Removing old container..."
+              sudo docker stop cloud-aspirant-site || true
+              sudo docker rm cloud-aspirant-site || true
+            fi
+
+            # Remove other container using port 80 (optional safety)
+            EXISTING_PORT_CONTAINER=$(sudo lsof -t -i:80)
+            if [ ! -z "$EXISTING_PORT_CONTAINER" ]; then
+              echo "Stopping container using port 80..."
+              sudo docker stop $(sudo docker ps -q --filter "publish=80") || true
+            fi
+
+            # Remove old repo folder
+            if [ -d "cloud-aspirant-site" ]; then
+              echo "Cleaning old repo directory..."
+              rm -rf cloud-aspirant-site
+            fi
+
+            # Clone latest code
             git clone https://github.com/karnikachinmayi/cloud-aspirant-site.git
-            cd linux-react-dream
-            docker build -t linux-react-dream .
-            docker stop linux-react-dream || true
-            docker rm linux-react-dream || true
-            docker run -d -p 80:80 --name linux-react-dream linux-react-dream
+            cd cloud-aspirant-site
+
+            # Build Docker image with BuildKit
+            echo "Building Docker image..."
+            DOCKER_BUILDKIT=1 sudo docker build -t cloud-aspirant-site .
+
+            # Run container
+            echo "Starting container..."
+            sudo docker run -d -p 80:80 --restart unless-stopped --name cloud-aspirant-site cloud-aspirant-site
+
+            echo "Deployment complete!"
