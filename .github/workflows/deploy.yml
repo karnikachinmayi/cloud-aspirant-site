@@ -10,11 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout the repository
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2️⃣ SSH into Azure VM and deploy
+      # 2️⃣ SSH to Azure VM and deploy
       - name: Deploy to Azure VM
         uses: appleboy/ssh-action@v1.1.0
         with:
@@ -25,17 +25,20 @@ jobs:
             set -e
             cd /home/${{ secrets.AZURE_USER }}
 
-            echo "📦 Preparing repository..."
-            rm -rf cloud-aspirant-site
+            echo "🧹 Cleaning old repo..."
+            sudo rm -rf cloud-aspirant-site
+
+            echo "📦 Cloning latest code..."
             git clone https://github.com/karnikachinmayi/cloud-aspirant-site.git
             cd cloud-aspirant-site
 
+            echo "🔍 Checking Dockerfile..."
             if [ ! -f Dockerfile ]; then
               echo "❌ No Dockerfile found!"
               exit 1
             fi
 
-            echo "🛑 Stopping old container..."
+            echo "🛑 Removing old container (if any)..."
             sudo docker stop cloud-aspirant-site || true
             sudo docker rm cloud-aspirant-site || true
 
@@ -43,6 +46,4 @@ jobs:
             sudo docker build -t cloud-aspirant-site .
 
             echo "🚀 Starting container..."
-            sudo docker run -d -p 80:80 --restart unless-stopped --name cloud-aspirant-site cloud-aspirant-site
-
-            echo "✅ Deployment complete!"
+            sudo docker run -d -p 80:80 --restart unless-stopped --name
