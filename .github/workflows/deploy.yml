@@ -1,0 +1,33 @@
+name: Deploy React App to Azure VM
+
+on:
+  push:
+    branches:
+      - main  # change if your branch name is different
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Azure VM via SSH and deploy
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.AZURE_HOST }}
+          username: ${{ secrets.AZURE_USER }}
+          key: ${{ secrets.AZURE_SSH_KEY }}
+          script: |
+            cd /home/${{ secrets.AZURE_USER }}
+            rm -rf linux-react-dream
+            git clone https://github.com/Hemanthsheena24/linux-react-dream.git
+            cd linux-react-dream
+            docker build -t linux-react-dream .
+            docker stop linux-react-dream || true
+            docker rm linux-react-dream || true
+            docker run -d -p 80:80 --name linux-react-dream linux-react-dream
